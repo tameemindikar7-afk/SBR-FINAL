@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>SBR-CORE | Reactor Monitoring Console</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2317406d'/%3E%3Cpath d='M6 19c3.3-5 6.7 5 10 0s6.7 5 10 0' fill='none' stroke='white' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" media="print" onload="this.media='all'">
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+<script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+<style>
+:root{
+  --bg:#f3f4f6;--panel:#fff;--ink:#0f1b2d;--ink2:#364559;--mute:#66758a;--faint:#9aa5b4;
+  --line:#e2e6eb;--line2:#ccd3dc;--soft:#f7f8fa;
+  --accent:#17406d;--accent-hi:#1d5088;--water:#cfe3f5;--water-line:#3a86c8;
+  --ok:#17784a;--ok-bg:#e6f3ec;--band:#d4e8dc;
+  --warn:#8a4b00;--warn-bg:#fdf2d9;--warn-line:#d9a21b;
+  --crit:#b3261e;--crit-bg:#fdeceb;
+  --sys:#47568a;--sys-bg:#eceff8;
+  --sans:'IBM Plex Sans','Segoe UI',system-ui,-apple-system,Roboto,Arial,sans-serif;
+  --mono:'IBM Plex Mono','Cascadia Mono',Consolas,ui-monospace,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{background:var(--bg);color:var(--ink);font:13px/1.45 var(--sans);display:flex;flex-direction:column;overflow:hidden;-webkit-font-smoothing:antialiased}
+button{font:inherit;color:inherit;cursor:pointer}
+button:disabled{cursor:not-allowed}
+.mono,.num{font-family:var(--mono);font-variant-numeric:tabular-nums}
+:focus-visible{outline:2px solid var(--accent-hi);outline-offset:2px}
+::-webkit-scrollbar{width:10px;height:10px}::-webkit-scrollbar-thumb{background:#c9d0d9;border-radius:5px;border:2px solid var(--bg)}::-webkit-scrollbar-track{background:transparent}
+body.pending>*:not(.modal):not(#toasts){visibility:hidden}
+
+/* ---------- header ---------- */
+.hdr{display:flex;justify-content:space-between;align-items:center;gap:12px 20px;flex-wrap:wrap;padding:10px 24px;min-height:62px;background:#fff;border-bottom:1px solid var(--line);flex-shrink:0}
+.grp{display:flex;align-items:center;flex-wrap:wrap;gap:10px 0}
+.brand{display:flex;align-items:center;gap:11px;padding-right:22px;margin-right:22px;border-right:1px solid var(--line)}
+.brand .mark{width:30px;height:30px;border-radius:6px;background:var(--accent);display:grid;place-items:center;flex-shrink:0}
+.brand b{display:block;font-size:16px;font-weight:700;letter-spacing:.07em;line-height:1.15}
+.brand small{display:block;font-size:11px;color:var(--mute)}
+.fld{display:flex;flex-direction:column;justify-content:center;padding:0 20px;min-height:34px}
+.fld+.fld{border-left:1px solid var(--line)}
+.fld span{font-size:9.5px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--mute)}
+.fld b{font-size:13px;font-weight:600;white-space:nowrap}
+.link{display:inline-flex;align-items:center;gap:8px;margin-top:2px;padding:3px 10px 3px 9px;border:1px solid var(--line2);border-radius:3px;font-size:11px;font-weight:700;letter-spacing:.05em;white-space:nowrap}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--faint);flex-shrink:0}
+.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn-line)}.dot.bad{background:var(--crit)}
+.hdr .btn{margin-left:14px}
+.hdr .estop{margin-left:8px}
+
+/* ---------- buttons / chips ---------- */
+.btn{background:#fff;border:1px solid var(--line2);color:var(--ink2);padding:8px 14px;border-radius:4px;font-size:11.5px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;transition:background .12s,border-color .12s}
+.btn:hover:not(:disabled){background:var(--soft);border-color:#aeb8c5;color:var(--ink)}
+.btn.p{background:var(--accent);border-color:var(--accent);color:#fff}
+.btn.p:hover:not(:disabled){background:var(--accent-hi);border-color:var(--accent-hi);color:#fff}
+.btn:disabled{background:var(--soft);color:#a3adba;border-color:var(--line)}
+.btn.p:disabled{background:#dfe7f0;border-color:#dfe7f0;color:#7d90a8}
+.btn.w{width:100%}
+.estop{background:var(--crit);border:1px solid var(--crit);color:#fff;padding:10px 20px;border-radius:4px;font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase}
+.estop:hover{background:#9d1f18}
+.estop.on{background:#3b4658;border-color:#3b4658}
+.chip{display:inline-block;font:700 9.5px/1 var(--sans);letter-spacing:.07em;text-transform:uppercase;padding:4px 7px;border-radius:3px;background:#edf0f4;color:var(--mute);white-space:nowrap}
+.chip[data-s="0"]{background:var(--ok-bg);color:var(--ok)}
+.chip[data-s="1"]{background:var(--crit);color:#fff}
+.chip[data-s="2"]{background:var(--warn-bg);color:var(--warn);box-shadow:inset 0 0 0 1px #efcf8b}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:4px;overflow:hidden;background:#fff}
+.seg button{border:0;border-right:1px solid var(--line2);background:#fff;padding:5px 11px;font-size:11px;font-weight:600;color:var(--ink2);letter-spacing:.03em}
+.seg button:last-child{border-right:0}
+.seg button:hover:not(:disabled):not(.on){background:var(--soft)}
+.seg button.on{background:var(--accent);color:#fff}
+input,select{padding:8px 10px;border:1px solid var(--line2);border-radius:4px;background:#fff;color:var(--ink);font:13px var(--sans);outline-offset:1px}
+input:focus,select:focus{border-color:var(--accent-hi)}
+input::placeholder{color:var(--faint)}
+
+/* priority marks */
+.pri{display:inline-grid;place-items:center;font:700 9.5px/1 var(--sans);flex-shrink:0;width:16px;height:16px}
+.pri.p1{background:var(--crit);color:#fff;border-radius:3px}
+.pri.p2{background:var(--warn-line);color:#3b2500;clip-path:polygon(50% 0,100% 100%,0 100%);align-items:end;padding-bottom:1px}
+.pri.p3{background:var(--sys);color:#fff;border-radius:50%}
+
+/* ---------- tabs ---------- */
+.tabs{display:flex;gap:30px;padding:0 24px;background:#fff;border-bottom:1px solid var(--line);flex-shrink:0;overflow-x:auto}
+.tab{background:none;border:0;border-bottom:2px solid transparent;margin-bottom:-1px;padding:12px 0 11px;font-size:13px;font-weight:600;color:var(--mute);white-space:nowrap;display:inline-flex;align-items:center;gap:8px}
+.tab:hover{color:var(--ink)}
+.tab.on{color:var(--ink);border-bottom-color:var(--accent)}
+.cnt{background:var(--crit);color:#fff;font:700 10px/1 var(--sans);padding:3px 6px;border-radius:9px;min-width:18px;text-align:center}
+.cnt[hidden]{display:none}
+
+/* ---------- alarm bar ---------- */
+.alarmbar{display:flex;align-items:center;gap:14px;padding:7px 24px;min-height:44px;background:#fff;border-bottom:1px solid var(--line);border-left:4px solid transparent;flex-shrink:0;font-size:12px}
+.alarmbar.ok{color:var(--mute)}
+.alarmbar .okdot{width:8px;height:8px;border-radius:50%;background:var(--ok)}
+.alarmbar.a1{background:var(--crit-bg);border-left-color:var(--crit);color:var(--crit)}
+.alarmbar.a2{background:var(--warn-bg);border-left-color:var(--warn-line);color:var(--warn)}
+.alarmbar.a3{background:var(--sys-bg);border-left-color:var(--sys);color:var(--sys)}
+.alarmbar .tx{flex:1;min-width:0;display:flex;flex-direction:column}
+.alarmbar .tx b{font-size:12.5px;letter-spacing:.03em;text-transform:uppercase;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.alarmbar .tx span{font-size:11px;opacity:.85}
+.alarmbar .acts{display:flex;gap:8px}
+.alarmbar .btn{padding:6px 12px;background:#fff;color:var(--ink)}
+
+/* ---------- layout ---------- */
+.view{display:none;flex:1;min-height:0;overflow:auto;padding:18px 24px 24px}
+.view.on{display:grid;gap:16px}
+#v-core{grid-template-columns:minmax(300px,1.05fr) minmax(390px,1.6fr) minmax(290px,1fr)}
+#v-alarms{grid-template-rows:auto minmax(0,1fr)}
+#v-alarms .panel{min-height:0}
+#v-maint{grid-template-columns:repeat(2,minmax(0,1fr));align-content:start}
+.col{display:flex;flex-direction:column;gap:16px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;display:flex;flex-direction:column;min-width:0;overflow:clip}
+.ph{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 16px;border-bottom:1px solid var(--line);flex-shrink:0}
+.ph h2{font-size:11px;font-weight:600;letter-spacing:.1em;text-transform:uppercase;color:var(--ink2)}
+.ph .aux{font-size:11px;color:var(--mute);font-weight:600;letter-spacing:.04em}
+.pbd{padding:16px;flex:1 1 auto;display:flex;flex-direction:column;gap:12px}
+.pbd.row{flex-direction:row;gap:20px}
+.kv{display:flex;justify-content:space-between;align-items:baseline;gap:12px;padding:8px 0;border-top:1px solid var(--line)}
+.kv span{font-size:11.5px;color:var(--mute)}
+.kv b{font-size:13px;font-weight:600}
+
+/* reactor level */
+.tank{flex:0 0 48%;min-width:150px;max-width:250px;min-height:240px;display:flex}
+.tank svg{width:100%;height:100%}
+.tank text{font:9px var(--mono)}
+.lv{flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between}
+.big{font:500 52px/1 var(--mono);letter-spacing:-.03em;color:var(--accent)}
+.big small{font-size:20px;color:var(--mute);margin-left:4px;letter-spacing:0}
+.sub{margin-top:6px;font-size:12px;color:var(--mute)}
+.sub b{color:var(--ink);font-family:var(--mono)}
+
+/* batch sequence */
+.seq{display:flex;flex-direction:column}
+.step{padding:10px 16px 11px;border-bottom:1px solid var(--line);position:relative}
+.step:last-child{border-bottom:0}
+.step .r{display:flex;align-items:baseline;justify-content:space-between;gap:10px}
+.step .n{font-size:12px;font-weight:700;letter-spacing:.08em;color:var(--ink2)}
+.step .s{font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--faint);margin-left:10px}
+.step .t{font:500 15px var(--mono);color:var(--mute)}
+.step .pr{height:3px;background:#edf0f4;border-radius:2px;margin-top:8px;overflow:hidden}
+.step .pr i{display:block;height:100%;width:0;background:var(--accent)}
+.step.on{background:#f1f6fb}
+.step.on::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--accent)}
+.step.on .n,.step.on .t{color:var(--accent)}
+.step.on .t{font-size:20px;font-weight:600}
+.step.on .s{color:var(--accent)}
+.step.done .s{color:var(--ok)}
+.step.done .pr i{background:#9fc2e4;width:100%}
+
+/* process variables */
+.pv{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line)}
+.cell{background:#fff;padding:14px 16px 12px;min-width:0}
+.cell .top{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.cell .name{font-size:11px;font-weight:600;letter-spacing:.09em;color:var(--mute);text-transform:uppercase}
+.read{display:flex;align-items:baseline;gap:6px;margin:8px 0 14px}
+.read .v{font:500 32px/1 var(--mono);letter-spacing:-.03em}
+.read .u{font-size:12px;color:var(--mute)}
+.scale{position:relative;height:8px;background:#eceff3;border-radius:2px}
+.scale .band{position:absolute;top:0;bottom:0;background:var(--band);border-radius:2px}
+.scale .tk{position:absolute;top:-3px;bottom:-3px;width:2px;margin-left:-1px}
+.scale .tk.w{background:var(--warn-line)}.scale .tk.a{background:var(--crit)}
+.scale .nd{position:absolute;top:-6px;width:3px;height:20px;margin-left:-1.5px;background:var(--ink);border-radius:1px;display:none}
+.scale .nd.w{background:#b9830b}.scale .nd.a{background:var(--crit)}
+.sc-l{display:flex;justify-content:space-between;margin-top:9px;font:10px var(--mono);color:var(--faint)}
+body.stale .read .v,body.stale .big,body.stale .tank{opacity:.45}
+
+/* trend */
+#trend{position:relative;flex:1 1 auto;min-height:210px}
+#trend svg{position:absolute;inset:0;display:block}
+#trend text{font:10px var(--mono);fill:var(--mute)}
+.c-grid{stroke:#eceff3;stroke-width:1}
+.c-axis{stroke:var(--line2);stroke-width:1}
+.c-band{fill:#eaf4ee}
+.c-line{fill:none;stroke:var(--accent);stroke-width:1.8;stroke-linejoin:round;stroke-linecap:round}
+.c-area{fill:rgba(23,64,109,.07)}
+.c-lim{stroke-width:1;stroke-dasharray:4 3}
+.c-lim.w{stroke:var(--warn-line)}.c-lim.a{stroke:var(--crit)}
+#trend .c-empty{font:500 30px var(--mono);fill:#aeb8c6;text-anchor:middle;letter-spacing:.1em}
+.c-cross{stroke:#8d99a9;stroke-width:1;stroke-dasharray:2 3}
+.c-tip rect{fill:var(--ink);rx:3}
+#trend .c-tip text{fill:#fff}
+.legend{display:flex;gap:18px;flex-wrap:wrap;padding:0 16px 12px;font-size:10.5px;color:var(--mute)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.sw{display:inline-block;width:14px;height:0;border-top:2px dashed}
+.sw.band{height:9px;width:14px;border:0;background:var(--band)}
+.sw.w{border-color:var(--warn-line)}.sw.a{border-color:var(--crit)}
+
+/* tools */
+.tools{display:flex;flex-direction:column;gap:10px}
+.tools .btn{padding:11px 14px}
+
+/* equipment */
+.eq{padding:13px 16px;border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:10px}
+.eq:last-child{border-bottom:0}
+.eq .h{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.eq .h b{display:inline-flex;align-items:center;gap:10px;font-size:12.5px;letter-spacing:.03em}
+.lamp{width:10px;height:10px;border-radius:50%;background:var(--line2);box-shadow:inset 0 0 0 1px rgba(15,27,45,.1);flex-shrink:0}
+.lamp.on{background:var(--ok);box-shadow:none}
+.eq .r2{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.eq .st{font-size:11px;color:var(--mute);letter-spacing:.06em}
+.eq .st b{color:var(--ink);font-family:var(--mono);margin-left:6px;font-size:12px}
+.eq .cmd{display:flex;gap:8px}.eq .cmd .btn{min-width:84px;padding:7px 12px}
+
+/* tables */
+.tb{width:100%;border-collapse:collapse;font-size:12.5px}
+.tb th,.tb td{padding:8px 16px;text-align:left;border-bottom:1px solid var(--line);vertical-align:middle}
+.tb th{position:sticky;top:0;background:var(--soft);font-size:10.5px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--mute);z-index:1;white-space:nowrap}
+.tb tbody tr:hover td{background:#f8fafc}
+.tb td.l{color:var(--mute);width:48%}
+.tb td.v{font-family:var(--mono);font-weight:600;text-align:right}
+.tb td.un{color:var(--warn);font-weight:600}
+.tb .pc{display:inline-flex;align-items:center;gap:8px}
+.scroll{overflow:auto;min-height:0;flex:1 1 auto}
+.bar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;padding:12px 16px}
+.bar .l{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.bar input{width:320px;max-width:100%}
+
+/* maintenance */
+.meter{height:8px;background:#eceff3;border-radius:2px;overflow:hidden}
+.meter i{display:block;height:100%;width:0;background:var(--accent)}
+.meter i.w{background:var(--warn-line)}.meter i.a{background:var(--crit)}
+.mlab{font-size:10.5px;font-weight:600;letter-spacing:.09em;text-transform:uppercase;color:var(--mute)}
+.mv{font:500 34px/1 var(--mono);letter-spacing:-.03em;margin:6px 0 2px}
+.mv small{font-size:12px;color:var(--mute);letter-spacing:0;margin-left:6px;font-family:var(--sans)}
+.mm{display:flex;justify-content:space-between;font:10.5px var(--mono);color:var(--faint);margin-top:6px}
+.mi{font-size:12px;color:var(--mute)}
+
+/* dialogs / toasts */
+.modal{position:fixed;inset:0;background:rgba(15,27,45,.4);display:none;align-items:center;justify-content:center;z-index:1000;padding:16px}
+.modal.solid{background:var(--bg)}
+.dlg{background:#fff;border:1px solid var(--line2);border-radius:8px;width:100%;max-width:400px;padding:26px;display:flex;flex-direction:column;gap:6px;box-shadow:0 18px 44px rgba(15,27,45,.16)}
+.dlg .bh{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.dlg h3{font-size:16px;font-weight:600}
+.dlg p.s{font-size:12px;color:var(--mute);margin-top:-6px;margin-bottom:8px}
+.dlg label{font-size:10.5px;font-weight:600;letter-spacing:.09em;color:var(--mute);margin-top:8px}
+.dlg .er{min-height:18px;font-size:12px;color:var(--crit);margin-top:4px}
+.dlg .acts{display:flex;gap:10px;margin-top:12px}.dlg .acts .btn{flex:1;padding:10px 14px}
+#toasts{position:fixed;right:20px;bottom:20px;display:flex;flex-direction:column;gap:8px;z-index:2000;max-width:min(380px,calc(100vw - 40px))}
+.toast{background:#fff;border:1px solid var(--line2);border-left:4px solid var(--crit);border-radius:4px;padding:11px 14px;font-size:12.5px;box-shadow:0 8px 24px rgba(15,27,45,.14)}
+.toast.ok{border-left-color:var(--ok)}
+
+@media(max-height:820px) and (min-width:1101px){
+  .hdr{padding:6px 24px;min-height:52px}
+  .tab{padding:9px 0 8px}
+  .alarmbar{min-height:38px;padding:5px 24px}
+  .view{padding:12px 24px 16px}.view.on{gap:12px}.col{gap:12px}
+  .ph{padding:8px 16px}.pbd{padding:12px 16px}
+  .cell{padding:10px 16px 9px}.read{margin:5px 0 10px}.read .v{font-size:28px}
+  .tb th,.tb td{padding:6px 16px}
+  .step{padding:7px 16px 8px}.step .pr{margin-top:6px}
+  .eq{padding:10px 16px;gap:8px}
+  .big{font-size:44px}.kv{padding:6px 0}
+  .tank{min-height:210px}#trend{min-height:170px}
+  .tools .btn{padding:9px 14px}.tools{gap:8px}
+}
+@media(max-width:1100px){
+  body{overflow:auto;height:auto}html{height:auto}
+  .view,.view.on{overflow:visible}
+  .view.on{grid-template-columns:minmax(0,1fr)!important;grid-template-rows:none!important}
+  #v-alarms .scroll{max-height:none}
+  .fld{padding:0 14px}.brand{padding-right:16px;margin-right:6px}
+}
+@media(max-width:640px){
+  .hdr,.tabs,.alarmbar,.view{padding-left:14px;padding-right:14px}
+  #v-maint{grid-template-columns:minmax(0,1fr)}
+  .hdr .grp{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px;width:100%}
+  .brand{grid-column:1/-1;border:0;margin:0;padding:0}
+  .fld{padding:0}.fld+.fld{border-left:0}
+  .hdr .btn,.hdr .estop{margin:0;width:100%}
+  .alarmbar{flex-wrap:wrap;padding-top:10px;padding-bottom:10px}
+  .alarmbar .tx{flex:1 1 60%}
+  .alarmbar .tx b{white-space:normal}
+  .alarmbar .acts{flex:0 0 100%}.alarmbar .acts .btn{flex:1}
+  .step .t{font-size:14px}
+}
+@media(max-width:520px){
+  .ph{flex-wrap:wrap}
+  .seg{max-width:100%}.seg button{padding:5px 9px}
+  #t-sel{width:100%}#t-sel button{flex:1}
+  .pv{grid-template-columns:1fr}
+  .cell .top{flex-wrap:wrap}
+  .pbd.row{flex-direction:column;align-items:center}
+  .tank{flex:0 0 auto;width:min(220px,70%);height:300px}
+  .lv{width:100%;gap:14px}
+  .bar input{width:100%}
+}
+</style>
+</head>
+<body>
+<header class="hdr">
+ <div class="grp">
+  <div class="brand">
+   <div class="mark"><svg width="18" height="18" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 19c4.3-6.5 8.7 6.5 13 0s8.7 6.5 13 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></div>
+   <div><b>SBR-CORE</b><small>Lab-scale SBR console</small></div>
+  </div>
+  <div class="fld"><span>Facility Node</span><b>BLR-INT-001</b></div>
+  <div class="fld"><span>Process ID</span><b>SBR-8492</b></div>
+  <div class="fld"><span>Sensor Link</span><div class="link"><i id="lk-dot" class="dot bad"></i><b id="lk-txt">NO DATA</b></div></div>
+ </div>
+ <div class="grp">
+  <div class="fld" style="text-align:right"><span>Last Update</span><b id="h-age" class="num">--</b></div>
+  <div class="fld"><span>Active Operator</span><b id="op">OP-LOCAL</b></div>
+  <button class="btn" id="logout" style="display:none">Logout</button>
+  <button class="estop" id="halt">System Halt</button>
+ </div>
+</header>
+
+<nav class="tabs" id="nav" role="tablist">
+ <button class="tab on" data-v="core" role="tab">Core Kinetics</button>
+ <button class="tab" data-v="alarms" role="tab">Alarm Ledger <span class="cnt" id="tab-cnt" hidden>0</span></button>
+ <button class="tab" data-v="maint" role="tab">Maintenance</button>
+</nav>
+
+<div class="alarmbar ok" id="alm-bn" role="status" aria-live="polite"></div>
+
+<!-- CORE KINETICS -->
+<section class="view on" id="v-core">
+ <div class="col">
+  <div class="panel" style="flex:1.5 1 auto">
+   <div class="ph"><h2>Reactor level &middot; R-101</h2><b class="chip" id="st-level">--</b></div>
+   <div class="pbd row">
+    <div class="tank" id="tank"></div>
+    <div class="lv">
+     <div><div class="big"><span id="tank-lvl">--</span><small>%</small></div><div class="sub"><b id="tank-vol">--</b> L of <span id="tank-cap"></span> L</div></div>
+     <div>
+      <div class="kv"><span>Direction</span><b id="lvl-dir">--</b></div>
+      <div class="kv"><span>Session low</span><b class="num" id="lvl-min">--</b></div>
+      <div class="kv"><span>Session high</span><b class="num" id="lvl-max">--</b></div>
+      <div class="kv"><span>Device</span><b class="mono" id="dev-id" style="font-size:12px">--</b></div>
+     </div>
+    </div>
+   </div>
+  </div>
+  <div class="panel" style="flex:1 1 auto">
+   <div class="ph"><h2>Batch sequence</h2><b class="aux" id="cyc-txt">NO CYCLE DATA</b></div>
+   <div class="seq" id="phases"></div>
+  </div>
+ </div>
+
+ <div class="col">
+  <div class="panel">
+   <div class="ph"><h2>Process variables</h2><b class="aux" id="pv-src">ESP32 NOT CONNECTED</b></div>
+   <div class="pv" id="pv-grid"></div>
+  </div>
+  <div class="panel" style="flex:1 1 auto">
+   <div class="ph"><h2>Real-Time Trend</h2><div class="seg" id="t-sel" role="group" aria-label="Trend variable"></div></div>
+   <div class="pbd" style="padding:12px 8px 0 8px"><div id="trend"></div></div>
+   <div class="legend"><span><i class="sw band"></i>Target band</span><span><i class="sw w"></i>Warning limit</span><span><i class="sw a"></i>Alarm limit</span></div>
+  </div>
+ </div>
+
+ <div class="col">
+  <div class="panel"><div class="ph"><h2>Equipment control</h2></div><div id="eq"></div></div>
+  <div class="panel"><div class="ph"><h2>System diagnostics</h2></div>
+   <table class="tb"><tbody>
+    <tr><td class="l">Device ID</td><td class="v" id="d-dev">--</td></tr>
+    <tr><td class="l">Link status</td><td class="v" id="d-lnk">--</td></tr>
+    <tr><td class="l">Database</td><td class="v" id="d-db">--</td></tr>
+    <tr><td class="l">Last sample</td><td class="v" id="d-last">--</td></tr>
+    <tr><td class="l">Samples received</td><td class="v" id="d-n">0</td></tr>
+   </tbody></table>
+  </div>
+  <div class="tools">
+   <button class="btn w" id="btn-pair">Pair hardware (ESP32)</button>
+   <button class="btn p w" id="btn-shift">Download shift report (CSV)</button>
+  </div>
+ </div>
+</section>
+
+<!-- ALARM LEDGER -->
+<section class="view" id="v-alarms">
+ <div class="panel"><div class="bar">
+  <div class="l"><input id="lg-q" type="search" placeholder="Search tags or descriptions..." aria-label="Search alarms"><select id="lg-f" aria-label="Priority filter"><option value="ALL">All Priorities</option><option value="1">Critical (L1)</option><option value="2">Warning (L2)</option><option value="3">System (L3)</option></select></div>
+  <button class="btn p" id="lg-exp">Export log (CSV)</button>
+ </div></div>
+ <div class="panel">
+  <div class="ph"><h2>Historical alarm records</h2><b class="aux" id="lg-count"></b></div>
+  <div class="scroll"><table class="tb"><thead><tr><th style="width:17%">Date/Time</th><th style="width:15%">Tag ID</th><th>Description</th><th style="width:14%">Priority</th><th style="width:14%">Acknowledged By</th><th style="width:17%">Ack Time</th></tr></thead><tbody id="lg-body"></tbody></table></div>
+ </div>
+</section>
+
+<!-- MAINTENANCE -->
+<section class="view" id="v-maint"></section>
+
+<!-- DIALOGS -->
+<div class="modal solid" id="m-login"><form class="dlg" id="lf">
+ <div class="bh"><div class="brand" style="border:0;padding:0;margin:0"><div class="mark"><svg width="18" height="18" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 19c4.3-6.5 8.7 6.5 13 0s8.7 6.5 13 0" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg></div><div><b>SBR-CORE</b><small>Reactor monitoring console</small></div></div></div>
+ <h3>Operator login</h3><p class="s">Sign in to view and control the reactor.</p>
+ <label for="lg-e">EMAIL</label><input id="lg-e" type="email" autocomplete="username" required>
+ <label for="lg-p">PASSWORD</label><input id="lg-p" type="password" autocomplete="current-password" required>
+ <div class="er" id="lg-err" role="alert"></div>
+ <button class="btn p" id="lg-go" type="submit" style="padding:11px 14px">Sign in</button>
+</form></div>
+
+<div class="modal" id="m-pair"><div class="dlg">
+ <h3>ESP32 hardware pairing</h3><p class="s">Enter the device ID and its authorisation PIN.</p>
+ <label for="p-id">TARGET DEVICE ID</label><input id="p-id" class="mono" placeholder="SBR-ESP-001" autocomplete="off">
+ <label for="p-pin">OPERATOR AUTH PIN</label><input id="p-pin" type="password" class="mono" autocomplete="off">
+ <div class="acts"><button class="btn" id="p-cancel">Cancel</button><button class="btn p" id="p-ok">Authorize &amp; connect</button></div>
+</div></div>
+
+<div class="modal" id="m-ask"><div class="dlg" role="alertdialog" aria-modal="true">
+ <h3 id="ask-t">Please confirm</h3><p class="s" id="ask-msg" style="margin-top:4px;font-size:13px;color:var(--ink2)"></p>
+ <div class="acts"><button class="btn" id="ask-cancel">Cancel</button><button class="btn p" id="ask-ok">Confirm</button></div>
+</div></div>
+<div id="toasts"></div>
+
+<script>
+(function(){
+'use strict';
+/* ================= CONFIG — edit here ================= */
+const C={
+ FB:{apiKey:"AIzaSyA_cflBLHqk7L46KZ8mAy7RKYm995DU3vc",authDomain:"sbr-scada-platform.firebaseapp.com",databaseURL:"https://sbr-scada-platform-default-rtdb.asia-southeast1.firebasedatabase.app",projectId:"sbr-scada-platform",storageBucket:"sbr-scada-platform.firebasestorage.app",messagingSenderId:"1010717791850",appId:"1:1010717791850:web:9e0d872b95df14b8ad5c13"},
+ DEVICE:'SBR-ESP-001',        // data lives under devices/<DEVICE>/...
+ LOGIN:true,                  // false = no Firebase login screen
+ STALE:15000, OFFLINE:60000,  // ms without data -> STALE (values dimmed) / OFFLINE (values replaced by --)
+ S:{ // sensors: ranges, target band, warning (L2) and alarm (L1) limits
+  ph:{label:'PH LEVEL',short:'pH',name:'pH',tag:'ALM-PH-101',unit:'pH',d:2,min:0,max:14,tgt:[6.5,8.5],warnLo:6.5,warnHi:8.5,alarmLo:6,alarmHi:9},
+  turbidity:{label:'TURBIDITY',short:'Turbidity',name:'Turbidity',tag:'ALM-TURB-101',unit:'NTU',d:1,min:0,max:1000,tgt:[0,500],warnHi:600,alarmHi:800},
+  tds:{label:'TDS',short:'TDS',name:'TDS',tag:'ALM-TDS-101',unit:'ppm',d:0,min:0,max:1000,tgt:[0,700],warnHi:800,alarmHi:950},
+  temperature:{label:'TEMPERATURE',short:'Temp',name:'Temperature',tag:'ALM-TEMP-101',unit:'°C',d:1,min:0,max:50,tgt:[20,30],warnLo:15,warnHi:32,alarmLo:10,alarmHi:38}},
+ PHASES:[['FILL',15],['REACT',45],['SETTLE',30],['DECANT',20]],   // minutes
+ LEVEL:{name:'Level',tag:'ALM-LVL-101',min:0,max:100,warnLo:20,warnHi:85,alarmLo:10,alarmHi:95,cap:5}, // cap = reactor volume in litres
+ EQUIP:[{id:'blower1',name:'BLOWER 1 VFD',limit:5000},{id:'blower2',name:'BLOWER 2 VFD',limit:5000},{id:'decant',name:'DECANT VALVE V-103',limit:3000},{id:'pump1',name:'TRANSFER PUMP 1',limit:5000}]
+};
+/* ================= HELPERS ================= */
+const $=id=>document.getElementById(id), S=C.S, keys=Object.keys(S);
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmt=(v,d)=>v==null||!isFinite(v)?'--':(+v).toFixed(d);
+const hms=t=>new Date(t).toLocaleTimeString('en-GB');
+const dts=t=>new Date(t).toLocaleDateString('en-CA')+' '+hms(t);
+const mmss=s=>{s=Math.max(0,Math.round(s));return String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0')};
+const dur=ms=>{const s=Math.round(ms/1000);return Math.floor(s/60)+'m '+s%60+'s'};
+const ago=s=>{s=Math.max(0,Math.round(s));return s<60?s+' s ago':s<3600?Math.floor(s/60)+' m '+s%60+' s ago':Math.floor(s/3600)+' h '+Math.floor(s%3600/60)+' m ago'};
+const PN={1:'Critical',2:'Warning',3:'System'};
+const pn=n=>n==1||n==2?n:3;
+const ind=n=>`<span class="pri p${pn(n)}" title="${PN[pn(n)]}">${pn(n)}</span>`;
+const ms=t=>{t=+t;return t&&t<1e11?t*1000:t};
+const ackT=r=>r.ackTs?hms(r.ackTs)+' (+'+dur(r.ackTs-r.ts)+')':'UNACK';
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const authMsg=x=>{const c=x&&x.code||'';return /invalid-credential|wrong-password|user-not-found|invalid-email/.test(c)?'Invalid email or password.':c==='auth/too-many-requests'?'Too many attempts. Try again later.':c==='auth/network-request-failed'?'Network error. Check your connection.':c==='auth/user-disabled'?'This account has been disabled.':(x&&x.message)||'Sign-in failed.'};
+function dl(name,rows){const b=new Blob(['﻿'+rows.map(r=>r.map(c=>'"'+String(c==null?'':c).replace(/"/g,'""')+'"').join(',')).join('\n')],{type:'text/csv'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),2000)}
+function toast(msg,kind){const el=document.createElement('div');el.className='toast'+(kind==='ok'?' ok':'');el.setAttribute('role','alert');el.textContent=msg;$('toasts').appendChild(el);setTimeout(()=>el.remove(),kind==='ok'?3000:6500)}
+let askRes=null;
+function ask(msg,label,title){return new Promise(res=>{if(askRes)askRes(false);askRes=res;$('ask-t').textContent=title||'Please confirm';$('ask-msg').textContent=msg;$('ask-ok').textContent=label||'Confirm';$('m-ask').style.display='flex';$('ask-ok').focus()})}
+function askDone(v){$('m-ask').style.display='none';const r=askRes;askRes=null;if(r)r(v)}
+$('ask-ok').onclick=()=>askDone(true);$('ask-cancel').onclick=()=>askDone(false);
+/* ================= STATE ================= */
+const newBuf=()=>keys.reduce((o,k)=>(o[k]=[],o),{});
+const newStats=()=>keys.concat('level').reduce((o,k)=>(o[k]={n:0,sum:0,min:Infinity,max:-Infinity},o),{});
+let db=null,auth=null,op='OP-LOCAL',srvOff=0,dev=(()=>{try{return localStorage.getItem('sbrDev')}catch(e){return null}})()||C.DEVICE,subs=[],started=false;
+let buf=newBuf(),stats=newStats(),lvl={},dirs={},shared={},recs={},st={},ctl={},mnt={},lastTs=0,count=0,offAl=false,gotFirst=false,lvBuf=[],lvMin=null,lvMax=null;
+let dbErr='',dbOn=false,dbEver=false,blanked=true,wasUp=false,sel='ph',hover=null,geo=null;
+try{firebase.initializeApp(C.FB);db=firebase.database();auth=firebase.auth()}catch(e){console.error('Firebase init failed',e)}
+if(db){db.ref('.info/connected').on('value',s=>{dbOn=s.val()===true;if(dbOn)dbEver=true});
+ db.ref('.info/serverTimeOffset').on('value',s=>{const v=+s.val();srvOff=isFinite(v)?v:0})}
+const now=()=>Date.now()+srvOff;                       // server-corrected clock (laptop clock may be off)
+const up=()=>lastTs>0&&now()-lastTs<C.OFFLINE;         // is the ESP32 delivering data?
+const P=()=>{const b='devices/'+dev+'/';return{live:b+'live',st:b+'status',ctl:b+'control',mnt:b+'maintenance',alm:b+'alarms',als:b+'alarmState'}};
+/* ================= BUILD STATIC UI ================= */
+$('pv-grid').innerHTML=keys.map(k=>{const s=S[k],p=x=>(x-s.min)/(s.max-s.min)*100,tk=(x,c)=>x==null?'':`<i class="tk ${c}" style="left:${p(x)}%"></i>`;
+ return `<div class="cell"><div class="top"><span class="name">${s.label}</span><b class="chip" id="st-${k}">--</b></div><div class="read"><span class="v" id="pv-${k}">--</span><span class="u">${s.unit}</span></div><div class="scale"><i class="band" style="left:${p(s.tgt[0])}%;width:${p(s.tgt[1])-p(s.tgt[0])}%"></i>${tk(s.warnLo,'w')}${tk(s.warnHi,'w')}${tk(s.alarmLo,'a')}${tk(s.alarmHi,'a')}<i class="nd" id="nd-${k}"></i></div><div class="sc-l"><span>${s.min}</span><span>${s.max}</span></div></div>`}).join('');
+$('t-sel').innerHTML=keys.map(k=>`<button type="button" data-k="${k}" class="${k===sel?'on':''}">${S[k].short}</button>`).join('');
+$('phases').innerHTML=C.PHASES.map((p,i)=>`<div class="step" id="ph-${i}"><div class="r"><div><span class="n">${p[0]}</span><span class="s" id="phs-${i}">NO DATA</span></div><span class="t" id="pht-${i}">--:--</span></div><div class="pr"><i id="phb-${i}"></i></div></div>`).join('');
+const EQ=[{n:'blower',t:'BLOWER 1 VFD',c:['START','STOP']},{n:'valve',t:'DECANT VALVE V-103',c:['OPEN','CLOSE']}];
+$('eq').innerHTML=EQ.map(e=>`<div class="eq"><div class="h"><b><i class="lamp" id="ind-${e.n}"></i>${e.t}</b><div class="seg"><button type="button" data-n="${e.n}" data-mode="MAN">MAN</button><button type="button" data-n="${e.n}" data-mode="AUTO">AUTO</button></div></div><div class="r2"><div class="st">STATE<b id="state-${e.n}">--</b></div><div class="cmd"><button type="button" class="btn" data-n="${e.n}" data-cmd="${e.c[0]}">${e.c[0]}</button><button type="button" class="btn" data-n="${e.n}" data-cmd="${e.c[1]}">${e.c[1]}</button></div></div></div>`).join('');
+$('v-maint').innerHTML=C.EQUIP.map(e=>`<div class="panel"><div class="ph"><h2>${e.name}</h2><b class="chip" id="ms-${e.id}">--</b></div><div class="pbd"><div><div class="mlab">Total run hours</div><div class="mv"><span id="mh-${e.id}">--</span><small>HRS</small></div></div><div><div class="meter"><i id="mb-${e.id}"></i></div><div class="mm"><span>0</span><span>LIMIT ${e.limit} HRS</span></div></div><div><div class="mi" id="mp-${e.id}"></div><div class="mi" id="ml-${e.id}"></div></div><button type="button" class="btn" data-reset="${e.id}">Log maintenance / reset</button></div></div>`).join('');
+/* ---- reactor tank ---- */
+function buildTank(){const L=C.LEVEL,y=p=>252-2.4*p;let t='';
+ for(let p=0;p<=100;p+=10){const big=p%20===0;t+=`<line x1="${big?24:28}" x2="32" y1="${y(p)}" y2="${y(p)}" stroke="#9aa5b4"/>`;if(big)t+=`<text x="20" y="${y(p)+3}" text-anchor="end" fill="#66758a">${p}</text>`}
+ const lim=(p,c,lab)=>p==null?'':`<line x1="32" x2="112" y1="${y(p)}" y2="${y(p)}" stroke="${c}" stroke-dasharray="3 2.5"/><text x="116" y="${y(p)+3}" fill="${c}" style="font-weight:600">${lab} ${p}</text>`;
+ $('tank').innerHTML=`<svg viewBox="0 0 154 266" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Reactor level"><rect x="32" y="12" width="80" height="240" rx="2" fill="#fbfcfd" stroke="#8d98a8" stroke-width="1.5"/><rect id="tank-fill" x="33" y="252" width="78" height="0" fill="#cfe3f5"/><rect id="tank-surf" x="33" y="252" width="78" height="0" fill="#3a86c8"/>${lim(L.alarmHi,'#b3261e','HH')}${lim(L.warnHi,'#b9830b','H')}${lim(L.warnLo,'#b9830b','L')}${lim(L.alarmLo,'#b3261e','LL')}${t}</svg>`;
+ $('tank-cap').textContent=L.cap}
+function tankFill(l){const h=l==null?0:2.4*l,f=$('tank-fill'),s=$('tank-surf');f.setAttribute('height',h);f.setAttribute('y',252-h);s.setAttribute('height',l==null?0:2);s.setAttribute('y',252-h)}
+/* ================= LIVE DATA ================= */
+function paint(k,n){const e=$('st-'+k),nd=$('nd-'+k);
+ if(e){e.textContent=n==null?'--':n==1?'ALARM':n==2?'WARNING':'NORMAL';e.dataset.s=n==null?'':n}
+ if(nd)nd.className='nd'+(n==1?' a':n==2?' w':'')}
+function needle(k,v){const s=S[k],nd=$('nd-'+k);if(!nd)return;nd.style.left=clamp((v-s.min)/(s.max-s.min)*100,0,100)+'%';nd.style.display='block'}
+function addStat(k,v){const m=stats[k];m.n++;m.sum+=v;if(v<m.min)m.min=v;if(v>m.max)m.max=v}
+function setLevel(l){lvBuf.push(l);if(lvBuf.length>30)lvBuf.shift();lvMin=lvMin==null?l:Math.min(lvMin,l);lvMax=lvMax==null?l:Math.max(lvMax,l);addStat('level',l);
+ tankFill(l);$('tank-lvl').textContent=l.toFixed(1);$('tank-vol').textContent=(l*C.LEVEL.cap/100).toFixed(2);
+ const d=l-lvBuf[0];$('lvl-dir').textContent=lvBuf.length<5?'--':d>.5?'↑ Filling':d<-.5?'↓ Draining':'→ Steady';
+ $('lvl-min').textContent=lvMin.toFixed(1)+' %';$('lvl-max').textContent=lvMax.toFixed(1)+' %';evalAlarm('level',l)}
+/* Everything on screen goes back to "--" when the ESP32 is not delivering data. */
+function blank(){blanked=true;
+ keys.forEach(k=>{$('pv-'+k).textContent='--';paint(k,null);const nd=$('nd-'+k);if(nd)nd.style.display='none'});
+ ['tank-lvl','tank-vol','lvl-dir','lvl-min','lvl-max'].forEach(i=>$(i).textContent='--');tankFill(null);paint('level',null);
+ buf=newBuf();lvBuf=[];drawTrend();renderPhases();renderCtl()}
+function onLive(d){
+ if(!d||typeof d!=='object')return;
+ const dt=ms(d.ts),hasTs=dt>1.5e12,n=now();
+ // A first snapshot without a usable timestamp could be leftovers from an earlier session: wait for the next update.
+ if(!hasTs&&!gotFirst){gotFirst=true;return}
+ // First snapshot: judge its age by the device timestamp. Later updates are live by definition (they just arrived).
+ const t=!gotFirst&&hasTs?Math.min(dt,n):n;gotFirst=true;
+ if(n-t>=C.OFFLINE){lastTs=t;return}          // old data: remember how old, never show it, never alarm on it
+ if(lastTs&&t-lastTs>=C.OFFLINE){buf=newBuf();lvBuf=[]}   // new run after a gap: start a fresh trend
+ lastTs=t;count++;blanked=false;
+ keys.forEach(k=>{const v=parseFloat(d[k]);if(!isFinite(v))return;
+  $('pv-'+k).textContent=fmt(v,S[k].d);needle(k,v);
+  buf[k].push({t,v});if(buf[k].length>600)buf[k].shift();addStat(k,v);evalAlarm(k,v)});
+ const lv=parseFloat(d.level);if(isFinite(lv))setLevel(clamp(lv,0,100));
+ drawTrend();renderPhases();renderCtl();
+}
+/* ================= TREND CHART (inline SVG) ================= */
+function niceTicks(lo,hi,n){const span=hi-lo||1,raw=span/n,mag=Math.pow(10,Math.floor(Math.log10(raw))),f=raw/mag,step=(f<1.5?1:f<3?2:f<7?5:10)*mag,t=[];
+ for(let v=Math.ceil(lo/step-1e-9)*step;v<=hi+1e-9;v+=step)t.push(+v.toFixed(10));return{t,dec:Math.max(0,Math.ceil(-Math.log10(step)-1e-9))}}
+function drawTrend(){
+ const host=$('trend'),W=host.clientWidth,H=host.clientHeight;if(W<120||H<90)return;
+ const s=S[sel],b=up()?buf[sel]:[],m={l:50,r:16,t:14,b:28},iw=W-m.l-m.r,ih=H-m.t-m.b;
+ let lo=s.tgt[0],hi=s.tgt[1],dmin=Infinity;
+ for(const p of b){if(p.v<lo)lo=p.v;if(p.v>hi)hi=p.v;if(p.v<dmin)dmin=p.v}
+ const pad=(hi-lo)*.1||1;lo=(lo-pad<s.min&&(dmin>=s.min||dmin===Infinity))?s.min:lo-pad;hi=hi+pad;
+ const Y=v=>m.t+ih-(v-lo)/(hi-lo)*ih,t0=b.length?b[0].t:0,t1=b.length?b[b.length-1].t:0,X=t=>t1>t0?m.l+(t-t0)/(t1-t0)*iw:m.l+iw/2;
+ let g=`<rect class="c-band" x="${m.l}" y="${Y(s.tgt[1]).toFixed(1)}" width="${iw}" height="${(Y(s.tgt[0])-Y(s.tgt[1])).toFixed(1)}"/>`;
+ const tk=niceTicks(lo,hi,5);
+ tk.t.forEach(v=>{const y=Y(v).toFixed(1);g+=`<line class="c-grid" x1="${m.l}" x2="${m.l+iw}" y1="${y}" y2="${y}"/><text x="${m.l-8}" y="${(+y+3.5).toFixed(1)}" text-anchor="end">${v.toFixed(tk.dec)}</text>`});
+ [['warnLo','w'],['warnHi','w'],['alarmLo','a'],['alarmHi','a']].forEach(([key,c])=>{const v=s[key];if(v!=null&&v>lo&&v<hi){const y=Y(v).toFixed(1);g+=`<line class="c-lim ${c}" x1="${m.l}" x2="${m.l+iw}" y1="${y}" y2="${y}"/>`}});
+ g+=`<line class="c-axis" x1="${m.l}" x2="${m.l+iw}" y1="${m.t+ih}" y2="${m.t+ih}"/>`;
+ if(!b.length){g+=`<text class="c-empty" x="${m.l+iw/2}" y="${m.t+ih/2+7}">--</text>`;geo=null}
+ else{
+  const nT=Math.max(2,Math.min(5,Math.floor(iw/120)));
+  if(b.length>1)for(let i=0;i<nT;i++){const tt=t0+(t1-t0)*i/(nT-1);g+=`<text x="${X(tt).toFixed(1)}" y="${H-8}" text-anchor="${i==0?'start':i==nT-1?'end':'middle'}">${hms(tt)}</text>`}
+  else g+=`<text x="${X(t0).toFixed(1)}" y="${H-8}" text-anchor="middle">${hms(t0)}</text>`;
+  const pts=b.map(p=>X(p.t).toFixed(1)+','+Y(p.v).toFixed(1));
+  if(b.length>1)g+=`<path class="c-area" d="M${pts[0]} L${pts.join(' L')} L${X(t1).toFixed(1)},${m.t+ih} L${X(t0).toFixed(1)},${m.t+ih}Z"/><path class="c-line" d="M${pts.join(' L')}"/>`;
+  const last=b[b.length-1];g+=`<circle cx="${X(last.t).toFixed(1)}" cy="${Y(last.v).toFixed(1)}" r="3.5" fill="var(--accent)"/>`;
+  geo={X,b};
+  if(hover!=null){let hp=b[0];for(const p of b)if(Math.abs(p.t-hover)<Math.abs(hp.t-hover))hp=p;
+   const x=X(hp.t),y=Y(hp.v),txt=fmt(hp.v,s.d)+' '+s.unit,tm=hms(hp.t),w=Math.max(txt.length,tm.length)*6.4+18,tx=x+w+12>W?x-w-10:x+10,ty=clamp(y-20,m.t,m.t+ih-38);
+   g+=`<line class="c-cross" x1="${x.toFixed(1)}" x2="${x.toFixed(1)}" y1="${m.t}" y2="${m.t+ih}"/><circle cx="${x.toFixed(1)}" cy="${y.toFixed(1)}" r="4.5" fill="#fff" stroke="var(--accent)" stroke-width="2"/><g class="c-tip"><rect x="${tx.toFixed(1)}" y="${ty.toFixed(1)}" width="${w.toFixed(1)}" height="36" rx="3"/><text x="${(tx+9).toFixed(1)}" y="${(ty+15).toFixed(1)}" style="font-weight:600">${esc(txt)}</text><text x="${(tx+9).toFixed(1)}" y="${(ty+29).toFixed(1)}" style="opacity:.75">${tm}</text></g>`}
+ }
+ host.innerHTML=`<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}" role="img" aria-label="${esc(s.name)} trend">${g}</svg>`;
+}
+$('trend').onmousemove=e=>{if(!geo)return;const x=e.clientX-$('trend').getBoundingClientRect().left;let hp=geo.b[0];for(const p of geo.b)if(Math.abs(geo.X(p.t)-x)<Math.abs(geo.X(hp.t)-x))hp=p;hover=hp.t;drawTrend()};
+$('trend').onmouseleave=()=>{hover=null;drawTrend()};
+$('t-sel').onclick=e=>{const k=e.target.dataset.k;if(!k)return;sel=k;hover=null;document.querySelectorAll('#t-sel button').forEach(x=>x.classList.toggle('on',x.dataset.k===k));drawTrend()};
+if(window.ResizeObserver)new ResizeObserver(()=>drawTrend()).observe($('trend'));
+/* ================= ALARMS ================= */
+function evalAlarm(k,v){
+ const s=k==='level'?C.LEVEL:S[k],pr=lvl[k]||0,dead=(s.max-s.min)*.01,hold=L=>pr&&pr<=L?dead:0;
+ const hi=(x,L)=>x!=null&&v>x-hold(L),lo=(x,L)=>x!=null&&v<x+hold(L);let n=0,dir='';
+ if(hi(s.alarmHi,1)){n=1;dir='HIGH'}else if(lo(s.alarmLo,1)){n=1;dir='LOW'}else if(hi(s.warnHi,2)){n=2;dir='HIGH'}else if(lo(s.warnLo,2)){n=2;dir='LOW'}
+ const changed=n!==pr||dir!==dirs[k];lvl[k]=n;dirs[k]=dir;paint(k,n);
+ if(n&&changed)raise(k,s.tag,`${s.name} ${dir==='HIGH'?'High':'Low'} ${n==1?'Alarm':'Warning'}`,n,dir,v);
+ else if(!n&&(pr||(shared[k]&&shared[k].lvl)))clear(k);
+}
+function raise(k,tag,desc,n,dir,v){
+ const rec=()=>({tag,desc,prio:n,ts:now(),val:v==null?null:v,ackBy:null,ackTs:null});
+ if(!db){recs['L'+Date.now()+k]=rec();draw();return}
+ const p=P();
+ // transaction = only one open dashboard logs each alarm event
+ db.ref(p.als+'/'+k).transaction(c=>c&&c.lvl===n&&c.dir===dir?undefined:{lvl:n,dir,ts:now()},(e,ok)=>{if(!e&&ok)db.ref(p.alm).push(rec())},false);
+}
+function clear(k){if(db)db.ref(P().als+'/'+k).transaction(c=>c&&c.lvl?{lvl:0,dir:'',ts:now()}:undefined,null,false)}
+function ledger(){const q=$('lg-q').value.toLowerCase(),f=$('lg-f').value;return Object.entries(recs).sort((a,b)=>b[1].ts-a[1].ts).filter(([i,r])=>(f==='ALL'||String(r.prio)===f)&&(r.tag+' '+r.desc).toLowerCase().includes(q))}
+function draw(){
+ const un=Object.entries(recs).filter(r=>!r[1].ackTs).sort((a,b)=>a[1].prio-b[1].prio||b[1].ts-a[1].ts),b=$('alm-bn'),c=$('tab-cnt');
+ document.title=(un.length?'('+un.length+') ':'')+'SBR-CORE | Reactor Monitoring Console';
+ c.textContent=un.length;c.hidden=!un.length;
+ if(!un.length){b.className='alarmbar ok';b.innerHTML='<i class="okdot"></i><span>No unacknowledged alarms</span>'}
+ else{const[id,r]=un[0];b.className='alarmbar a'+pn(r.prio);b.innerHTML=`${ind(r.prio)}<div class="tx"><b>${esc(r.desc)}</b><span>TAG ${esc(r.tag)} &middot; ${dts(r.ts)} &middot; UNACKNOWLEDGED${un.length>1?' &middot; +'+(un.length-1)+' MORE':''}</span></div><div class="acts"><button type="button" class="btn" data-ack="${esc(id)}">Acknowledge</button>${un.length>1?'<button type="button" class="btn" data-ack="*">Ack all</button>':''}</div>`}
+ const L=ledger();
+ $('lg-body').innerHTML=L.map(([i,r])=>`<tr><td class="mono">${dts(r.ts)}</td><td class="mono"><b>${esc(r.tag)}</b></td><td>${esc(r.desc)}</td><td><span class="pc">${ind(r.prio)}${PN[pn(r.prio)]}</span></td><td class="mono">${esc(r.ackBy||'—')}</td><td class="mono${r.ackTs?'':' un'}">${ackT(r)}</td></tr>`).join('')||'<tr><td colspan="6" style="color:var(--mute);padding:22px 16px">No alarms recorded.</td></tr>';
+ $('lg-count').textContent=L.length+' OF '+Object.keys(recs).length+' RECORDS';
+}
+$('alm-bn').onclick=e=>{const id=e.target.dataset.ack;if(!id)return;const u={ackBy:op,ackTs:now()},ids=id==='*'?Object.keys(recs).filter(i=>!recs[i].ackTs):[id];
+ ids.forEach(i=>{if(db&&!i.startsWith('L'))db.ref(P().alm+'/'+i).update(u).catch(x=>toast('Acknowledge failed: '+x.message));else if(recs[i])Object.assign(recs[i],u)});draw()};
+$('lg-q').oninput=$('lg-f').onchange=draw;
+$('lg-exp').onclick=()=>dl('Alarm_Ledger_Export.csv',[['Date/Time','Tag','Description','Priority','Ack By','Ack Time']].concat(ledger().map(([i,r])=>[dts(r.ts),r.tag,r.desc,'L'+r.prio,r.ackBy||'',ackT(r)])));
+/* ================= CYCLE + EQUIPMENT CONTROL ================= */
+function renderPhases(){
+ const U=up(),c=U?st.cycle||{}:{},cur=U?C.PHASES.findIndex(p=>p[0]===String(c.phase||'').toUpperCase()):-1;
+ const rem=cur<0?null:c.endsAt?(ms(c.endsAt)-now())/1000:(c.remainingSec!=null&&c._rx?c.remainingSec-(Date.now()-c._rx)/1000:null);
+ C.PHASES.forEach((p,i)=>{const on=i===cur,done=cur>=0&&i<cur;$('ph-'+i).className='step'+(on?' on':'')+(done?' done':'');
+  $('phs-'+i).textContent=cur<0?'NO DATA':on?'ACTIVE':done?'COMPLETED':'PENDING';
+  $('pht-'+i).textContent=cur<0?'--:--':on?(rem==null?'--:--':mmss(rem)):p[1]+' min';
+  $('phb-'+i).style.width=on&&rem!=null?clamp((1-rem/(p[1]*60))*100,0,100)+'%':'';});
+ $('cyc-txt').textContent=cur<0?'NO CYCLE DATA':'RUNNING: '+C.PHASES[cur][0];
+}
+function onSt(v){st=v||{};if(st.cycle&&st.cycle.remainingSec!=null)st.cycle._rx=Date.now();renderPhases();renderCtl()}
+function renderCtl(){
+ const U=up(),h=!!(ctl.halt&&ctl.halt.active);
+ EQ.forEach(e=>{const c=ctl[e.n]||{},f=st[e.n],auto=(c.mode||'AUTO')==='AUTO',
+  on=U&&(f!=null?['ON','OPEN','RUNNING'].includes(String(f).toUpperCase()):c.cmd===e.c[0]);
+  $('ind-'+e.n).classList.toggle('on',on);$('state-'+e.n).textContent=!U?'--':f!=null?String(f).toUpperCase():(c.cmd||'--');
+  document.querySelectorAll(`[data-n="${e.n}"][data-mode]`).forEach(x=>x.classList.toggle('on',x.dataset.mode===(auto?'AUTO':'MAN')));
+  document.querySelectorAll(`[data-n="${e.n}"][data-cmd]`).forEach(x=>{x.disabled=auto||h||!U;x.classList.toggle('p',U&&c.cmd===x.dataset.cmd)})});
+ $('halt').textContent=h?'Reset Halt':'System Halt';$('halt').classList.toggle('on',h);
+}
+function onCtl(v){ctl=v||{};renderCtl()}
+function canSend(needUp){
+ if(!db){toast('Database connection unavailable.');return false}
+ // never queue a control command while offline: it would fire unattended when the link returns
+ if(!dbOn){toast('Database is disconnected. Command NOT sent. Retry when the link is restored.');return false}
+ if(needUp&&!up()){toast('ESP32 is not connected. Command NOT sent.');return false}
+ return true}
+function send(path,p,needUp){if(!canSend(needUp))return;const q=Object.assign(p,{by:op,ts:now()});
+ db.ref(P().ctl+'/'+path).update(q).catch(x=>toast('Command failed: '+x.message))}
+$('eq').onclick=e=>{const t=e.target.closest('[data-n]');if(!t||t.disabled)return;const p={};if(t.dataset.mode)p.mode=t.dataset.mode;if(t.dataset.cmd)p.cmd=t.dataset.cmd;send(t.dataset.n,p,true)};
+$('halt').onclick=()=>{if(!canSend(false))return;const h=!!(ctl.halt&&ctl.halt.active);
+ ask(h?'Release the system halt?':'Send HALT to all outputs? (Software halt only — keep a hardwired E-stop on the rig.)',h?'Release halt':'Send halt',h?'Release halt':'System halt').then(ok=>{if(ok)send('halt',{active:!h},false)})};
+/* ================= MAINTENANCE ================= */
+function onMnt(v){mnt=v||{};C.EQUIP.forEach(e=>{const d=mnt[e.id]||{},h=d.total==null?null:Math.max(0,d.total-(d.base||0)),p=h==null?0:h/e.limit*100,b=$('mb-'+e.id),vv=$('mh-'+e.id),c=$('ms-'+e.id);
+ vv.textContent=h==null?'--':Math.round(h);vv.style.color=p>=100?'var(--crit)':p>=90?'var(--warn)':'';b.style.width=Math.min(100,p)+'%';b.className=p>=100?'a':p>=90?'w':'';
+ $('mp-'+e.id).textContent=h==null?'No run-hour data received yet':p.toFixed(0)+'% of interval used | '+Math.max(0,Math.round(e.limit-h))+' h remaining';
+ $('ml-'+e.id).textContent=d.lastReset?'Last service: '+dts(d.lastReset)+(d.resetBy?' by '+d.resetBy:''):'No service logged yet';
+ c.textContent=h==null?'--':p>=100?'SERVICE OVERDUE':p>=90?'SERVICE DUE SOON':String(d.status||'OK').toUpperCase();c.dataset.s=h==null?'':p>=100?1:p>=90?2:0})}
+$('v-maint').onclick=e=>{const id=e.target.dataset.reset;if(!id)return;const d=mnt[id]||{};if(d.total==null)return toast('No run-hour data received for this equipment yet.');
+ if(!canSend(false))return;
+ ask('Confirm maintenance log for '+id+'? Run hours will restart from zero.','Log maintenance','Log maintenance').then(ok=>{if(!ok||!canSend(false))return;
+  db.ref(P().mnt+'/'+id).update({base:d.total,lastReset:now(),resetBy:op}).catch(x=>toast('Maintenance log failed: '+x.message))})};
+/* ================= REPORTS ================= */
+$('btn-shift').onclick=()=>{const N=['NORMAL','ALARM','WARNING'],U=up(),rows=[['SBR OPERATOR SHIFT REPORT'],['Generated',new Date().toLocaleString()],['Operator',op],['Device',dev],['Link',$('lk-txt').textContent],[],['Parameter','Current','Unit','Status','Min','Max','Avg']];
+ const row=(name,cur,unit,k,d,l)=>{const m=stats[k],h=m.n>0,f=x=>fmt(x,d);rows.push([name,cur,unit,U&&h?N[l||0]:'NO DATA',h?f(m.min):'--',h?f(m.max):'--',h?f(m.sum/m.n):'--'])};
+ keys.forEach(k=>row(S[k].name,$('pv-'+k).textContent,S[k].unit,k,S[k].d,lvl[k]));
+ row('Reactor level',$('tank-lvl').textContent,'%','level',1,lvl.level);
+ rows.push([],['ALARMS'],['Date/Time','Tag','Description','Priority','Ack By','Ack Time']);
+ Object.values(recs).sort((a,b)=>b.ts-a.ts).forEach(r=>rows.push([dts(r.ts),r.tag,r.desc,'L'+r.prio,r.ackBy||'',ackT(r)]));
+ dl('Operator_Shift_Report_'+new Date().toLocaleDateString('en-CA')+'.csv',rows)};
+/* ================= LINK STATUS TICK ================= */
+setInterval(()=>{const a=lastTs?Math.max(0,now()-lastTs):Infinity,s=a<C.STALE?'ONLINE':a<C.OFFLINE?'STALE':lastTs?'OFFLINE':'NO DATA',isUp=a<C.OFFLINE;
+ if(!isUp&&!blanked)blank();
+ if(isUp!==wasUp){wasUp=isUp;renderCtl()}
+ let txt=s,cls=s==='ONLINE'?'ok':s==='STALE'?'warn':'bad',dbs=dbOn?'CONNECTED':dbEver?'DISCONNECTED':'CONNECTING';
+ if(dbErr){txt=dbErr;cls='bad';dbs='ERROR'}
+ else if(db&&started&&!dbOn){txt=dbEver?'DB DISCONNECTED':'CONNECTING';cls='warn'}
+ $('lk-txt').textContent=txt;$('lk-dot').className='dot '+cls;$('d-lnk').textContent=s;$('d-db').textContent=db?dbs:'UNAVAILABLE';$('d-dev').textContent=dev;$('dev-id').textContent=dev;$('d-n').textContent=count;
+ $('pv-src').textContent=isUp?'LIVE FROM ESP32':'ESP32 NOT CONNECTED';
+ $('h-age').textContent=lastTs?ago(a/1000):'--';$('d-last').textContent=lastTs?dts(lastTs):'--';
+ document.body.classList.toggle('stale',s==='STALE');
+ // only declare ESP32 comm loss when WE are connected to Firebase (otherwise it is our own link that is down)
+ if(s==='OFFLINE'&&!offAl&&dbOn){offAl=true;raise('comm','SYS-COM-001','ESP32 Telemetry Comm Loss',3,'LOSS',null)}else if(s==='ONLINE'&&offAl){offAl=false;clear('comm')}
+ renderPhases()},1000);
+/* ================= FIREBASE BINDINGS ================= */
+function bind(){
+ subs.forEach(r=>r.off());subs=[];gotFirst=false;dbErr=db?'':'FIREBASE UNAVAILABLE';if(!db||!started)return;const p=P();
+ const on=(path,cb,q)=>{const r=q?q(db.ref(path)):db.ref(path);r.on('value',s=>{dbErr='';cb(s.val())},e=>{dbErr='DB ERROR: '+e.code});subs.push(r)};
+ on(p.live,onLive);on(p.st,onSt);on(p.ctl,onCtl);on(p.mnt,onMnt);on(p.als,v=>shared=v||{});on(p.alm,v=>{recs=v||{};draw()},r=>r.limitToLast(500));
+}
+function start(){if(started)return;started=true;bind();draw();renderCtl()}
+function resetData(){buf=newBuf();stats=newStats();lvl={};dirs={};shared={};recs={};st={};ctl={};mnt={};lvBuf=[];lvMin=lvMax=null;lastTs=0;count=0;offAl=false;gotFirst=false;
+ blank();onMnt(null);draw()}
+if(C.LOGIN&&auth){
+ document.body.classList.add('pending');
+ let authSeen=false;const reveal=()=>{document.body.classList.remove('pending')};
+ setTimeout(()=>{if(!authSeen){reveal();$('m-login').style.display='flex'}},6000);
+ if(location.protocol==='file:')auth.setPersistence(firebase.auth.Auth.Persistence.NONE).catch(()=>{});
+ auth.onAuthStateChanged(u=>{authSeen=true;reveal();$('m-login').style.display=u?'none':'flex';$('logout').style.display=u?'':'none';
+  if(u){op=(u.email||'OP').split('@')[0].toUpperCase();$('op').textContent=op;start()}
+  else{ // signed out / session expired: drop listeners and clear the screen so nothing stale remains
+   subs.forEach(r=>r.off());subs=[];started=false;resetData();setTimeout(()=>$('lg-e').focus(),50)}});
+ $('lf').onsubmit=e=>{e.preventDefault();const er=$('lg-err'),b=$('lg-go');er.textContent='';b.disabled=true;
+  auth.signInWithEmailAndPassword($('lg-e').value.trim(),$('lg-p').value).then(()=>{$('lg-p').value=''}).catch(x=>{er.textContent=authMsg(x)}).finally(()=>{b.disabled=false})};
+ $('logout').onclick=()=>auth.signOut().then(()=>location.reload());
+}else start();
+/* ================= ESP32 PAIRING ================= */
+const pairLabel=()=>{$('btn-pair').textContent=dev!==C.DEVICE?'Paired device: '+dev:'Pair hardware (ESP32)'};
+$('btn-pair').onclick=()=>{$('p-id').value='';$('p-pin').value='';$('m-pair').style.display='flex';$('p-id').focus()};
+$('p-cancel').onclick=()=>$('m-pair').style.display='none';
+$('m-pair').onclick=e=>{if(e.target===$('m-pair'))$('m-pair').style.display='none'};
+[$('p-id'),$('p-pin')].forEach(i=>i.onkeydown=k=>{if(k.key==='Enter')$('p-ok').click()});
+$('p-ok').onclick=()=>{const id=$('p-id').value.trim(),pin=$('p-pin').value.trim();if(!id||!pin)return toast('Device ID and PIN are required.');if(!db)return toast('Database connection unavailable.');
+ if(/[.$#\[\]\/\s]/.test(id)||id.length>64)return toast('Invalid Device ID format.');
+ const b=$('p-ok'),t=b.textContent;b.textContent='Authenticating...';b.disabled=true;
+ db.ref('authorized_hardware/'+id).once('value').then(s=>{if(!(s.exists()&&s.val()&&String(s.val().pin)===pin)){const x=new Error('bad');x.bad=1;throw x}
+  return db.ref('authorized_hardware/'+id).update({status:'paired',pairedAt:now()}).then(()=>{dev=id;try{localStorage.setItem('sbrDev',id)}catch(e){}$('m-pair').style.display='none';
+   pairLabel();resetData();bind();toast('Paired with '+id+'.','ok')})})
+ .catch(x=>toast(x&&x.bad?'Authentication failed: invalid Device ID or PIN.':'Pairing failed: '+((x&&x.message)||x))).finally(()=>{b.textContent=t;b.disabled=false})};
+/* ================= TABS / MISC ================= */
+$('nav').onclick=e=>{const v=e.target.closest('[data-v]');if(!v)return;document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on',t===v));document.querySelectorAll('.view').forEach(s=>s.classList.toggle('on',s.id==='v-'+v.dataset.v));drawTrend()};
+document.addEventListener('keydown',k=>{if(k.key==='Escape'){$('m-pair').style.display='none';if(askRes)askDone(false)}});
+pairLabel();buildTank();tankFill(null);renderPhases();renderCtl();onMnt(null);draw();drawTrend();
+})();
+</script>
+</body>
+</html>
