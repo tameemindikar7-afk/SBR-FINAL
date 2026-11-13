@@ -325,6 +325,9 @@ body.stale .read .v,body.stale .big,body.stale .tank{opacity:.45}
      <div><div class="big"><span id="tank-lvl">--</span><small>%</small></div><div class="sub"><b id="tank-vol">--</b> L of <span id="tank-cap"></span> L</div></div>
      <div>
       <div class="kv"><span>Direction</span><b id="lvl-dir">--</b></div>
+      <div class="kv"><span>Water depth</span><b class="num" id="lvl-cm">--</b></div>
+      <div class="kv"><span>Surface zone</span><b id="lvl-zone">--</b></div>
+      <div class="kv"><span>Decant level (20 cm)</span><b id="lvl-dec">--</b></div>
       <div class="kv"><span>Session low</span><b class="num" id="lvl-min">--</b></div>
       <div class="kv"><span>Session high</span><b class="num" id="lvl-max">--</b></div>
       <div class="kv"><span>Device</span><b class="mono" id="dev-id" style="font-size:12px">--</b></div>
@@ -417,11 +420,11 @@ const C={
  STALE:15000, OFFLINE:60000,  // ms without data -> STALE (values dimmed) / OFFLINE (values replaced by --)
  S:{ // sensors: ranges, target band, warning (L2) and alarm (L1) limits
   ph:{label:'PH LEVEL',short:'pH',name:'pH',tag:'ALM-PH-101',unit:'pH',d:2,min:0,max:14,tgt:[6.5,8.5],warnLo:6.5,warnHi:8.5,alarmLo:6,alarmHi:9},
-  turbidity:{label:'TURBIDITY',short:'Turbidity',name:'Turbidity',tag:'ALM-TURB-101',unit:'NTU',d:1,min:0,max:1000,tgt:[0,500],warnHi:600,alarmHi:800},
-  tds:{label:'TDS',short:'TDS',name:'TDS',tag:'ALM-TDS-101',unit:'ppm',d:0,min:0,max:1000,tgt:[0,700],warnHi:800,alarmHi:950},
+  turbidity:{label:'TURBIDITY',short:'Turbidity',name:'Turbidity',tag:'ALM-TURB-101',unit:'NTU',d:1,min:0,max:2500,tgt:[0,500],warnHi:600,alarmHi:2500},
+  tds:{label:'TDS',short:'TDS',name:'TDS',tag:'ALM-TDS-101',unit:'ppm',d:0,min:0,max:1500,tgt:[0,700],warnHi:800,alarmHi:950},
   temperature:{label:'TEMPERATURE',short:'Temp',name:'Temperature',tag:'ALM-TEMP-101',unit:'°C',d:1,min:0,max:50,tgt:[20,30],warnLo:15,warnHi:32,alarmLo:10,alarmHi:38}},
- PHASES:[['FILL',15],['REACT',45],['SETTLE',30],['DECANT',20]],   // minutes
- LEVEL:{name:'Level',tag:'ALM-LVL-101',min:0,max:100,warnLo:20,warnHi:85,alarmLo:10,alarmHi:95,cap:5}, // cap = reactor volume in litres
+ PHASES:[['FILL',15],['REACT',45],['SETTLE',30],['DECANT',20]],   // minutess
+ LEVEL:{name:'Level',tag:'ALM-LVL-101',min:0,max:100,cap:5},  // level warnings removed. To restore: add warnLo:20,warnHi:85,alarmLo:10,alarmHi:95 // cap = reactor volume in litres
  EQUIP:[{id:'blower1',name:'BLOWER 1 VFD',limit:5000},{id:'blower2',name:'BLOWER 2 VFD',limit:5000},{id:'decant',name:'DECANT VALVE V-103',limit:3000},{id:'pump1',name:'TRANSFER PUMP 1',limit:5000}]
 };
 /* ================= HELPERS ================= */
@@ -470,8 +473,12 @@ $('v-maint').innerHTML=C.EQUIP.map(e=>`<div class="panel"><div class="ph"><h2>${
 function buildTank(){const L=C.LEVEL,y=p=>252-2.4*p;let t='';
  for(let p=0;p<=100;p+=10){const big=p%20===0;t+=`<line x1="${big?24:28}" x2="32" y1="${y(p)}" y2="${y(p)}" stroke="#9aa5b4"/>`;if(big)t+=`<text x="20" y="${y(p)+3}" text-anchor="end" fill="#66758a">${p}</text>`}
  const lim=(p,c,lab)=>p==null?'':`<line x1="32" x2="112" y1="${y(p)}" y2="${y(p)}" stroke="${c}" stroke-dasharray="3 2.5"/><text x="116" y="${y(p)+3}" fill="${c}" style="font-weight:600">${lab} ${p}</text>`;
- $('tank').innerHTML=`<svg viewBox="0 0 154 266" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Reactor level"><rect x="32" y="12" width="80" height="240" rx="2" fill="#fbfcfd" stroke="#8d98a8" stroke-width="1.5"/><rect id="tank-fill" x="33" y="252" width="78" height="0" fill="#cfe3f5"/><rect id="tank-surf" x="33" y="252" width="78" height="0" fill="#3a86c8"/>${lim(L.alarmHi,'#b3261e','HH')}${lim(L.warnHi,'#b9830b','H')}${lim(L.warnLo,'#b9830b','L')}${lim(L.alarmLo,'#b3261e','LL')}${t}</svg>`;
+ const zt=(yy,s)=>`<text x="72" y="${yy}" text-anchor="middle" style="font-size:6.5px;fill:#8794a6;letter-spacing:.04em">${s}</text>`,zn=p=>`<line x1="32" x2="112" y1="${y(p)}" y2="${y(p)}" stroke="#aab4c2" stroke-width=".8"/>`;
+ const ZN=`<rect x="33" y="-35" width="78" height="46" fill="#f1f3f6"/>`+zn(100)+zn(80)+zn(20)+zt(-10,'FREE BOARD 25-30')+zt(38,'SUPERNATANT 20-25')+zt(134,'MIXED LIQUOR 5-20')+zt(230,'SETTLED SLUDGE 0-5')+`<path d="M112 ${y(80)-4}l9 4-9 4z" fill="#17406d"/><text x="123" y="${y(80)+3}" style="font-size:7px;fill:#17406d;font-weight:600">V-103</text>`;
+ $('tank').innerHTML=`<svg viewBox="0 -36 154 302" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Reactor level"><rect x="32" y="-36" width="80" height="288" rx="2" fill="#fbfcfd" stroke="#8d98a8" stroke-width="1.5"/><rect id="tank-fill" x="33" y="252" width="78" height="0" fill="#cfe3f5"/><rect id="tank-surf" x="33" y="252" width="78" height="0" fill="#3a86c8"/>${ZN}${lim(L.alarmHi,'#b3261e','HH')}${lim(L.warnHi,'#b9830b','H')}${lim(L.warnLo,'#b9830b','L')}${lim(L.alarmLo,'#b3261e','LL')}${t}</svg>`;
  $('tank-cap').textContent=L.cap}
+const TK={W:25,SL:5,DC:20};  // tank diagram: max water 25 cm (100%), sludge top 5 cm, decant valve 20 cm, tank wall 30 cm
+function lvZone(l){const cm=l*TK.W/100;$('lvl-cm').textContent=cm.toFixed(1)+' cm of '+TK.W;$('lvl-zone').textContent=cm<=TK.SL?'Settled sludge':cm<TK.DC?'Mixed liquor':'Supernatant';$('lvl-dec').textContent=cm>=TK.DC?'Reached':'Not reached'}
 function tankFill(l){const h=l==null?0:2.4*l,f=$('tank-fill'),s=$('tank-surf');f.setAttribute('height',h);f.setAttribute('y',252-h);s.setAttribute('height',l==null?0:2);s.setAttribute('y',252-h)}
 /* ================= LIVE DATA ================= */
 function paint(k,n){const e=$('st-'+k),nd=$('nd-'+k);
@@ -480,13 +487,13 @@ function paint(k,n){const e=$('st-'+k),nd=$('nd-'+k);
 function needle(k,v){const s=S[k],nd=$('nd-'+k);if(!nd)return;nd.style.left=clamp((v-s.min)/(s.max-s.min)*100,0,100)+'%';nd.style.display='block'}
 function addStat(k,v){const m=stats[k];m.n++;m.sum+=v;if(v<m.min)m.min=v;if(v>m.max)m.max=v}
 function setLevel(l){lvBuf.push(l);if(lvBuf.length>30)lvBuf.shift();lvMin=lvMin==null?l:Math.min(lvMin,l);lvMax=lvMax==null?l:Math.max(lvMax,l);addStat('level',l);
- tankFill(l);$('tank-lvl').textContent=l.toFixed(1);$('tank-vol').textContent=(l*C.LEVEL.cap/100).toFixed(2);
+ lvZone(l);tankFill(l);$('tank-lvl').textContent=l.toFixed(1);$('tank-vol').textContent=(l*C.LEVEL.cap/100).toFixed(2);
  const d=l-lvBuf[0];$('lvl-dir').textContent=lvBuf.length<5?'--':d>.5?'↑ Filling':d<-.5?'↓ Draining':'→ Steady';
  $('lvl-min').textContent=lvMin.toFixed(1)+' %';$('lvl-max').textContent=lvMax.toFixed(1)+' %';evalAlarm('level',l)}
 /* Everything on screen goes back to "--" when the ESP32 is not delivering data. */
 function blank(){blanked=true;
  keys.forEach(k=>{$('pv-'+k).textContent='--';paint(k,null);const nd=$('nd-'+k);if(nd)nd.style.display='none'});
- ['tank-lvl','tank-vol','lvl-dir','lvl-min','lvl-max'].forEach(i=>$(i).textContent='--');tankFill(null);paint('level',null);
+ ['tank-lvl','tank-vol','lvl-dir','lvl-min','lvl-max','lvl-cm','lvl-zone','lvl-dec'].forEach(i=>$(i).textContent='--');tankFill(null);paint('level',null);
  buf=newBuf();lvBuf=[];drawTrend();renderPhases();renderCtl()}
 function onLive(d){
  if(!d||typeof d!=='object')return;
@@ -603,15 +610,17 @@ $('eq').onclick=e=>{const t=e.target.closest('[data-n]');if(!t||t.disabled)retur
 $('halt').onclick=()=>{if(!canSend(false))return;const h=!!(ctl.halt&&ctl.halt.active);
  ask(h?'Release the system halt?':'Send HALT to all outputs? (Software halt only — keep a hardwired E-stop on the rig.)',h?'Release halt':'Send halt',h?'Release halt':'System halt').then(ok=>{if(ok)send('halt',{active:!h},false)})};
 /* ================= MAINTENANCE ================= */
-function onMnt(v){mnt=v||{};C.EQUIP.forEach(e=>{const d=mnt[e.id]||{},h=d.total==null?null:Math.max(0,d.total-(d.base||0)),p=h==null?0:h/e.limit*100,b=$('mb-'+e.id),vv=$('mh-'+e.id),c=$('ms-'+e.id);
+const DM={blower1:{demo:1,total:1248.5,base:0,lastReset:Date.now()-30*864e5,resetBy:'Maintenance Team',status:'OK'},blower2:{demo:1,total:4620,base:0,lastReset:Date.now()-120*864e5,resetBy:'Maintenance Team',status:'OK'}};  // demo data shown until real data arrives
+function onMnt(v){mnt=v||{};['blower1','blower2'].forEach(k=>{if(!mnt[k]||mnt[k].total==null)mnt[k]=DM[k]});C.EQUIP.forEach(e=>{const d=mnt[e.id]||{},h=d.total==null?null:Math.max(0,d.total-(d.base||0)),p=h==null?0:h/e.limit*100,b=$('mb-'+e.id),vv=$('mh-'+e.id),c=$('ms-'+e.id);
  vv.textContent=h==null?'--':Math.round(h);vv.style.color=p>=100?'var(--crit)':p>=90?'var(--warn)':'';b.style.width=Math.min(100,p)+'%';b.className=p>=100?'a':p>=90?'w':'';
  $('mp-'+e.id).textContent=h==null?'No run-hour data received yet':p.toFixed(0)+'% of interval used | '+Math.max(0,Math.round(e.limit-h))+' h remaining';
- $('ml-'+e.id).textContent=d.lastReset?'Last service: '+dts(d.lastReset)+(d.resetBy?' by '+d.resetBy:''):'No service logged yet';
+ $('ml-'+e.id).textContent=d.lastReset?'Last service: '+dts(d.lastReset)+(d.resetBy?' by '+d.resetBy:'')+(d.demo?' (demo data)':''):'No service logged yet';
  c.textContent=h==null?'--':p>=100?'SERVICE OVERDUE':p>=90?'SERVICE DUE SOON':String(d.status||'OK').toUpperCase();c.dataset.s=h==null?'':p>=100?1:p>=90?2:0})}
 $('v-maint').onclick=e=>{const id=e.target.dataset.reset;if(!id)return;const d=mnt[id]||{};if(d.total==null)return toast('No run-hour data received for this equipment yet.');
  if(!canSend(false))return;
- ask('Confirm maintenance log for '+id+'? Run hours will restart from zero.','Log maintenance','Log maintenance').then(ok=>{if(!ok||!canSend(false))return;
+ ask('Confirm maintenance log for '+id+'? Run hours will restart from zero.','Log maintenance','Log maintenance').then(ok=>{if(!ok)return;if(d.demo){d.base=d.total;d.lastReset=Date.now();d.resetBy=op;onMnt(mnt);toast('Demo maintenance logged for '+id);return}if(!canSend(false))return;
   db.ref(P().mnt+'/'+id).update({base:d.total,lastReset:now(),resetBy:op}).catch(x=>toast('Maintenance log failed: '+x.message))})};
+onMnt(null);
 /* ================= REPORTS ================= */
 $('btn-shift').onclick=()=>{const N=['NORMAL','ALARM','WARNING'],U=up(),rows=[['SBR OPERATOR SHIFT REPORT'],['Generated',new Date().toLocaleString()],['Operator',op],['Device',dev],['Link',$('lk-txt').textContent],[],['Parameter','Current','Unit','Status','Min','Max','Avg']];
  const row=(name,cur,unit,k,d,l)=>{const m=stats[k],h=m.n>0,f=x=>fmt(x,d);rows.push([name,cur,unit,U&&h?N[l||0]:'NO DATA',h?f(m.min):'--',h?f(m.max):'--',h?f(m.sum/m.n):'--'])};
